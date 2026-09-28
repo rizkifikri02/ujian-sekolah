@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Guru - Pemantauan Ujian</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #areaCetakKartu, #areaCetakKartu * { visibility: visible; }
+      #areaCetakKartu { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <header class="bg-indigo-900 text-white p-4 shadow-lg sticky top-0 z-50 no-print">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="font-bold text-lg sm:text-xl">Panel Kontrol Guru</h1>
+        <p class="text-xs text-indigo-300">Pengawasan Ujian & Pengelolaan Bank Soal</p>
+      </div>
+      <a href="/api/rekap-excel" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+        <span>📥 Download Rekap Excel</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+
+    <div class="flex border-b border-slate-300 bg-white rounded-t-xl px-4 pt-2 no-print">
+      <button id="tab1" onclick="switchTab('pantau')" class="py-3 px-6 font-bold text-indigo-700 border-b-2 border-indigo-700 text-sm">1. Pemantauan Real-Time</button>
+      <button id="tab2" onclick="switchTab('siswa')" class="py-3 px-6 font-bold text-slate-500 text-sm">2. Input Data Siswa & Kartu</button>
+      <button id="tab3" onclick="switchTab('soal')" class="py-3 px-6 font-bold text-slate-500 text-sm">3. Input Bank Soal</button>
+    </div>
+
+    <!-- PANEL 1: MONITORING REAL-TIME -->
+    <section id="secPantau" class="bg-white p-6 rounded-b-xl shadow-sm border border-slate-200">
+      <div class="flex justify-between items-center mb-4 no-print">
+        <h2 class="text-base font-bold text-slate-700">Aktivitas Siswa Saat Ujian</h2>
+        <span class="text-xs text-slate-400">*Otomatis memperbarui data setiap 3 detik</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs sm:text-sm">
+          <thead class="bg-slate-100 text-slate-600 font-bold uppercase border-b">
+            <tr>
+              <th class="p-3">Username</th>
+              <th class="p-3">Nama Siswa</th>
+              <th class="p-3">Kelas</th>
+              <th class="p-3">Password</th>
+              <th class="p-3">Status Ujian</th>
+              <th class="p-3">Pelanggaran</th>
+              <th class="p-3">Nilai Akhir</th>
+            </tr>
+          </thead>
+          <tbody id="tblMonitoring" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PANEL 2: INPUT SISWA & KARTU LOGIN -->
+    <section id="secSiswa" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-slate-200 space-y-6">
+      
+      <!-- UPLOAD FILE SISWA -->
+      <div class="bg-indigo-50 border-2 border-dashed border-indigo-300 p-5 rounded-xl no-print">
+        <h2 class="text-base font-bold text-indigo-900 mb-1">📁 Import Data Siswa dari File (Excel, Word, PDF)</h2>
+        <p class="text-xs text-indigo-700 mb-4">Unggah file Excel (`.xlsx`), Word (`.docx`), atau PDF (`.pdf`) berisi nama dan kelas siswa.</p>
+        
+        <form onsubmit="uploadSiswa(event)" class="flex flex-col sm:flex-row gap-3 items-center">
+          <input type="file" id="fileSiswa" accept=".xlsx, .xls, .docx, .pdf" required class="w-full bg-white p-2 border rounded-lg text-xs">
+          <button type="submit" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg text-xs whitespace-nowrap">
+            ⬆️ UPLOAD & IMPOR SISWA
+          </button>
+        </form>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Form Input Manual -->
+        <div class="no-print">
+          <h2 class="text-base font-bold text-slate-700 mb-4">Atau Tambah Siswa Manual</h2>
+          <form onsubmit="tambahSiswa(event)" class="space-y-4 bg-slate-50 p-4 rounded-xl border">
+            <div>
+              <label class="block text-xs font-bold mb-1">NAMA LENGKAP SISWA</label>
+              <input type="text" id="addNama" required placeholder="Contoh: Ahmad Ridwan" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">KELAS</label>
+              <input type="text" id="addKelas" required placeholder="Contoh: 9A" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-sm transition">
+              + TAMBAH SISWA
+            </button>
+          </form>
+        </div>
+
+        <!-- Area Kartu Siswa -->
+        <div class="lg:col-span-2">
+          <div class="flex justify-between items-center mb-4 no-print">
+            <h2 class="text-base font-bold text-slate-700">Daftar Kartu Login Siswa</h2>
+            <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg">
+              🖨️ Cetak Semua Kartu Ujian
+            </button>
+          </div>
+
+          <div id="areaCetakKartu" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 3: INPUT SOAL -->
+    <section id="secSoal" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-slate-200 space-y-8">
+      
+      <!-- UPLOAD WORD FILE -->
+      <div class="bg-indigo-50 border-2 border-dashed border-indigo-300 p-6 rounded-xl">
+        <h2 class="text-base font-bold text-indigo-900 mb-1">📄 Import Soal dari File Word (.docx)</h2>
+        <p class="text-xs text-indigo-700 mb-4">Unggah file Word berisi tabel soal & kunci jawaban untuk otomatis diimpor sekaligus.</p>
+        
+        <form onsubmit="uploadWord(event)" class="flex flex-col sm:flex-row gap-3 items-center">
+          <input type="file" id="fileWord" accept=".docx" required class="w-full bg-white p-2 border rounded-lg text-xs">
+          <button type="submit" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg text-xs whitespace-nowrap">
+            ⬆️ UPLOAD & IMPOR SOAL
+          </button>
+        </form>
+      </div>
+
+      <!-- INPUT MANUAL -->
+      <details class="group">
+        <summary class="font-bold text-sm text-slate-700 cursor-pointer select-none">
+          + Atau Tambah Soal Manual Satu per Satu
+        </summary>
+        <form onsubmit="tambahSoal(event)" class="space-y-4 max-w-2xl mt-4 pt-4 border-t">
+          <div>
+            <label class="block text-xs font-bold mb-1">PERTANYAAN / SOAL</label>
+            <textarea id="txtPertanyaan" placeholder="Tuliskan pertanyaan ujian di sini..." class="w-full p-3 border rounded-lg text-sm h-24"></textarea>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold mb-1">Pilihan A</label>
+              <input type="text" id="opsiA" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">Pilihan B</label>
+              <input type="text" id="opsiB" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">Pilihan C</label>
+              <input type="text" id="opsiC" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">Pilihan D</label>
+              <input type="text" id="opsiD" class="w-full p-2.5 border rounded-lg text-sm">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold mb-1">KUNCI JAWABAN BENAR</label>
+            <select id="kunciJawaban" class="w-full p-2.5 border rounded-lg text-sm font-bold bg-slate-50">
+              <option value="A">Pilihan A</option>
+              <option value="B">Pilihan B</option>
+              <option value="C">Pilihan C</option>
+              <option value="D">Pilihan D</option>
+            </select>
+          </div>
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm">SIMPAN SOAL</button>
+        </form>
+      </details>
+
+      <hr>
+      
+      <!-- DAFTAR SOAL -->
+      <div>
+        <h3 class="font-bold text-sm mb-4">Daftar Bank Soal Tersimpan</h3>
+        <div id="listBankSoal" class="space-y-3"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('secPantau').classList.add('hidden');
+      document.getElementById('secSiswa').classList.add('hidden');
+      document.getElementById('secSoal').classList.add('hidden');
+      
+      document.getElementById('tab1').className = 'py-3 px-6 font-bold text-slate-500 text-sm';
+      document.getElementById('tab2').className = 'py-3 px-6 font-bold text-slate-500 text-sm';
+      document.getElementById('tab3').className = 'py-3 px-6 font-bold text-slate-500 text-sm';
+
+      if (tab === 'pantau') {
+        document.getElementById('secPantau').classList.remove('hidden');
+        document.getElementById('tab1').className = 'py-3 px-6 font-bold text-indigo-700 border-b-2 border-indigo-700 text-sm';
+      } else if (tab === 'siswa') {
+        document.getElementById('secSiswa').classList.remove('hidden');
+        document.getElementById('tab2').className = 'py-3 px-6 font-bold text-indigo-700 border-b-2 border-indigo-700 text-sm';
+        fetchKartuSiswa();
+      } else if (tab === 'soal') {
+        document.getElementById('secSoal').classList.remove('hidden');
+        document.getElementById('tab3').className = 'py-3 px-6 font-bold text-indigo-700 border-b-2 border-indigo-700 text-sm';
+        loadBankSoal();
+      }
+    }
+
+    async function fetchMonitoring() {
+      const res = await fetch('/api/admin/monitoring');
+      const data = await res.json();
+      
+      let html = '';
+      data.forEach(s => {
+        let badgeStatus = 'bg-slate-100 text-slate-600';
+        if (s.status_ujian === 'BERJALAN') badgeStatus = 'bg-amber-100 text-amber-800 font-bold animate-pulse';
+        if (s.status_ujian === 'SELESAI') badgeStatus = 'bg-emerald-100 text-emerald-800 font-bold';
+
+        let badgeViol = s.total_pelanggaran > 0 ? 'text-red-600 font-bold bg-red-50 px-2 py-1 rounded' : 'text-slate-500';
+
+        html += `
+          <tr>
+            <td class="p-3 font-mono font-bold">${s.username}</td>
+            <td class="p-3 font-semibold">${s.nama}</td>
+            <td class="p-3">${s.kelas}</td>
+            <td class="p-3 font-mono text-slate-500">${s.password}</td>
+            <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs ${badgeStatus}">${s.status_ujian}</span></td>
+            <td class="p-3"><span class="${badgeViol}">${s.total_pelanggaran} Kali</span></td>
+            <td class="p-3 font-bold text-base ${s.status_ujian === 'SELESAI' ? 'text-indigo-600' : 'text-slate-300'}">${s.status_ujian === 'SELESAI' ? s.nilai_akhir : '-'}</td>
+          </tr>
+        `;
+      });
+      document.getElementById('tblMonitoring').innerHTML = html;
+    }
+
+    async function fetchKartuSiswa() {
+      const res = await fetch('/api/admin/monitoring');
+      const data = await res.json();
+
+      let html = '';
+      data.forEach(s => {
+        html += `
+          <div class="border-2 border-indigo-900 rounded-lg p-4 bg-white shadow-sm space-y-2">
+            <div class="border-b pb-2 flex justify-between items-center">
+              <span class="font-bold text-xs text-indigo-900 uppercase">KARTU LOGIN UJIAN</span>
+              <span class="text-xs bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded">Kelas ${s.kelas}</span>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500">Nama Siswa:</p>
+              <p class="font-bold text-sm text-slate-800">${s.nama}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded border font-mono text-xs">
+              <div>
+                <span class="text-slate-400 block text-[10px]">USERNAME</span>
+                <span class="font-bold text-indigo-700">${s.username}</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px]">PASSWORD</span>
+                <span class="font-bold text-emerald-700">${s.password}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      document.getElementById('areaCetakKartu').innerHTML = html;
+    }
+
+    async function uploadSiswa(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('fileSiswa');
+      if (!fileInput.files[0]) return alert('Pilih file siswa terlebih dahulu!');
+
+      const formData = new FormData();
+      formData.append('file_siswa', fileInput.files[0]);
+
+      const res = await fetch('/api/admin/upload-siswa', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        fileInput.value = '';
+        fetchKartuSiswa();
+        fetchMonitoring();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    async function uploadWord(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('fileWord');
+      if (!fileInput.files[0]) return alert('Pilih file Word terlebih dahulu!');
+
+      const formData = new FormData();
+      formData.append('file_word', fileInput.files[0]);
+
+      const res = await fetch('/api/admin/upload-word', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        fileInput.value = '';
+        loadBankSoal();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    async function tambahSiswa(e) {
+      e.preventDefault();
+      const body = {
+        nama: document.getElementById('addNama').value,
+        kelas: document.getElementById('addKelas').value
+      };
+
+      const res = await fetch('/api/admin/tambah-siswa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Siswa Berhasil Ditambahkan!\n\nUsername: ${data.username}\nPassword: ${data.password}`);
+        e.target.reset();
+        fetchKartuSiswa();
+        fetchMonitoring();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    async function tambahSoal(e) {
+      e.preventDefault();
+      const body = {
+        pertanyaan: document.getElementById('txtPertanyaan').value,
+        opsi_a: document.getElementById('opsiA').value,
+        opsi_b: document.getElementById('opsiB').value,
+        opsi_c: document.getElementById('opsiC').value,
+        opsi_d: document.getElementById('opsiD').value,
+        kunci: document.getElementById('kunciJawaban').value
+      };
+
+      const res = await fetch('/api/admin/tambah-soal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        alert('Soal berhasil ditambahkan!');
+        e.target.reset();
+        loadBankSoal();
+      }
+    }
+
+    async function loadBankSoal() {
+      const res = await fetch('/api/admin/bank-soal');
+      const data = await res.json();
+
+      let html = '';
+      data.forEach((s, idx) => {
+        html += `
+          <div class="p-4 border rounded-lg bg-slate-50 text-xs">
+            <p class="font-bold text-slate-800 text-sm mb-2">${idx + 1}. ${s.pertanyaan}</p>
+            <div class="grid grid-cols-2 gap-2 text-slate-600 mb-2">
+              <div>A. ${s.opsi_a}</div>
+              <div>B. ${s.opsi_b}</div>
+              <div>C. ${s.opsi_c}</div>
+              <div>D. ${s.opsi_d}</div>
+            </div>
+            <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">Kunci: ${s.kunci}</span>
+          </div>
+        `;
+      });
+      document.getElementById('listBankSoal').innerHTML = html;
+    }
+
+    setInterval(fetchMonitoring, 3000);
+    fetchMonitoring();
+  </script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Ujian Online</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 select-none">
+
+  <!-- Halaman Login -->
+  <div id="pageLogin" class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md border">
+      <h1 class="text-2xl font-bold text-center text-indigo-700 mb-2">Ujian Online Sekolah</h1>
+      <p class="text-xs text-center text-slate-500 mb-6">Masukkan Username dan Password pada Kartu Ujian Anda</p>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold mb-1">USERNAME / ID UJIAN</label>
+          <input type="text" id="loginUser" required class="w-full p-3 border rounded-lg text-sm font-mono uppercase" placeholder="Contoh: UJS-9A-123">
+        </div>
+        <div>
+          <label class="block text-xs font-bold mb-1">PASSWORD / PIN</label>
+          <input type="password" id="loginPass" required class="w-full p-3 border rounded-lg text-sm font-mono" placeholder="••••">
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition text-sm">MASUK UJIAN</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Halaman Ujian -->
+  <div id="pageUjian" class="hidden min-h-screen flex flex-col">
+    <header class="bg-indigo-900 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50">
+      <div>
+        <h2 id="txtNamaSiswa" class="font-bold text-base"></h2>
+        <p id="txtKelasSiswa" class="text-xs text-indigo-300"></p>
+      </div>
+      <div class="text-right">
+        <span class="text-xs block text-indigo-300">Sisa Waktu</span>
+        <span id="txtTimer" class="font-mono font-bold text-lg text-amber-400">00:00:00</span>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <div id="boxWarning" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-xs font-bold">
+        ⚠️ PERINGATAN: Dilarang membuka tab/aplikasi lain selama ujian berlangsung!
+      </div>
+
+      <div id="containerSoal" class="space-y-6"></div>
+
+      <button onclick="submitUjian()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition text-sm">SELESAIKAN UJIAN</button>
+    </main>
+  </div>
+
+  <script>
+    let currentSiswa = null;
+    let daftarSoal = [];
+    let timerInterval = null;
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const username = document.getElementById('loginUser').value;
+      const password = document.getElementById('loginPass').value;
+
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        currentSiswa = data.siswa;
+        mulaiUjian();
+      } else {
+        alert(data.message);
+      }
+    }
+
+    async function mulaiUjian() {
+      const res = await fetch('/api/mulai-ujian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siswa_id: currentSiswa.id, durasi_menit: 45 })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message);
+        return;
+      }
+
+      daftarSoal = data.soal;
+      document.getElementById('pageLogin').classList.add('hidden');
+      document.getElementById('pageUjian').classList.remove('hidden');
+
+      document.getElementById('txtNamaSiswa').innerText = currentSiswa.nama;
+      document.getElementById('txtKelasSiswa').innerText = `Kelas: ${currentSiswa.kelas}`;
+
+      renderSoal();
+      startTimer(data.waktu_selesai);
+      aktifkanProteksi();
+    }
+
+    function renderSoal() {
+      let html = '';
+      daftarSoal.forEach((s, idx) => {
+        html += `
+          <div class="bg-white p-6 rounded-xl border shadow-sm">
+            <p class="font-bold text-sm mb-4">${idx + 1}. ${s.pertanyaan}</p>
+            <div class="space-y-2 text-xs">
+              ${renderOpsi(s.id, 'A', s.opsi_a)}
+              ${renderOpsi(s.id, 'B', s.opsi_b)}
+              ${renderOpsi(s.id, 'C', s.opsi_c)}
+              ${renderOpsi(s.id, 'D', s.opsi_d)}
+            </div>
+          </div>
+        `;
+      });
+      document.getElementById('containerSoal').innerHTML = html;
+    }
+
+    function renderOpsi(soalId, opsi, teks) {
+      return `
+        <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer">
+          <input type="radio" name="soal_${soalId}" value="${opsi}" onchange="pilihJawaban(${soalId}, '${opsi}')" class="w-4 h-4 text-indigo-600">
+          <span><strong>${opsi}.</strong> ${teks}</span>
+        </label>
+      `;
+    }
+
+    async function pilihJawaban(soalId, jawaban) {
+      await fetch('/api/simpan-jawaban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siswa_id: currentSiswa.id, soal_id: soalId, jawaban })
+      });
+    }
+
+    function startTimer(targetTime) {
+      const endTime = new Date(targetTime).getTime();
+      timerInterval = setInterval(() => {
+        const now = new Date().getTime();
+        const diff = endTime - now;
+
+        if (diff <= 0) {
+          clearInterval(timerInterval);
+          alert('Waktu ujian telah habis!');
+          submitUjian();
+          return;
+        }
+
+        const jam = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const menit = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const detik = Math.floor((diff % (1000 * 60)) / 1000);
+
+        document.getElementById('txtTimer').innerText = 
+          `${String(jam).padStart(2,'0')}:${String(menit).padStart(2,'0')}:${String(detik).padStart(2,'0')}`;
+      }, 1000);
+    }
+
+    function aktifkanProteksi() {
+      window.addEventListener('blur', () => {
+        document.getElementById('boxWarning').classList.remove('hidden');
+        fetch('/api/catat-pelanggaran', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siswa_id: currentSiswa.id })
+        });
+      });
+    }
+
+    async function submitUjian() {
+      if (!confirm('Apakah Anda yakin ingin mengumpulkan jawaban?')) return;
+
+      const res = await fetch('/api/submit-ujian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siswa_id: currentSiswa.id })
+      });
+
+      const data = await res.json();
+      alert(`Ujian Selesai!\nNilai Anda: ${data.nilai}`);
+      location.reload();
+    }
+  </script>
+</body>
+</html>
